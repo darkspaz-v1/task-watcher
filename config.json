@@ -1,0 +1,4 @@
+{
+  "poll_interval_seconds": 1.0,
+  "stale_after_minutes": 30
+}
