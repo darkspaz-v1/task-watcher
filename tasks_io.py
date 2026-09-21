@@ -1,7 +1,11 @@
 import json
+import logging
 import os
 import time
 from pathlib import Path
+
+log = logging.getLogger(__name__)
+_warned = set()  # files already reported; the poll loop re-reads every second
 
 APP_DIR = Path(__file__).parent
 TASKS_DIR = APP_DIR / "tasks"
@@ -40,10 +44,23 @@ def read_all_tasks():
         try:
             with open(f, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
+            if not isinstance(data, dict):
+                if f.name not in _warned:
+                    _warned.add(f.name)
+                    log.warning("skipping %s: top-level JSON is not an object", f.name)
+                continue
             if data.get("status") not in VALID_STATUSES:
                 data["status"] = "running"
             tasks[f.stem] = data
-        except Exception:
+        except OSError:
+            # File being replaced by a writer right now: skip it this poll, the next one re-reads.
+            log.debug("skipping unreadable task file %s", f.name, exc_info=True)
+            continue
+        except ValueError:
+            # Invalid JSON / bad encoding: skip it so one bad file can't take the panel down.
+            if f.name not in _warned:
+                _warned.add(f.name)
+                log.warning("skipping %s: not valid JSON", f.name, exc_info=True)
             continue
     return tasks
 

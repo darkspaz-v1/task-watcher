@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -125,3 +126,17 @@ def test_main_recovers_from_wrong_shaped_existing_file(monkeypatch, isolated_tas
     (isolated_tasks_dir / "claude-s3.json").write_text("[1, 2]", encoding="utf-8")
     run_main(monkeypatch, {"hook_event_name": "PreToolUse", "tool_name": "X", "session_id": "s3"})
     assert read_task(isolated_tasks_dir, "claude-s3.json")["progress"] == 5
+
+
+def test_write_failure_is_logged_to_file_not_stderr(monkeypatch, isolated_tasks_dir, tmp_path, capsys):
+    def boom(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(hook_bridge.os, "replace", boom)
+    run_main(monkeypatch, {"hook_event_name": "Stop", "session_id": "s9"})  # must not raise
+    for h in logging.getLogger().handlers:
+        h.flush()
+    log_text = (tmp_path / "logs" / "hook_bridge.log").read_text(encoding="utf-8")
+    assert "could not write task file claude-s9.json" in log_text
+    out = capsys.readouterr()
+    assert out.out == "" and out.err == ""

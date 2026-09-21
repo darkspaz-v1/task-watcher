@@ -1,4 +1,5 @@
 import json
+import logging
 import msvcrt
 import queue
 import threading
@@ -12,6 +13,7 @@ import pystray
 from PIL import ImageTk
 from winotify import Notification, audio
 
+from applog import setup_logging
 from icon import app_icon
 from task_row import TaskRow, ensure_progressbar_styles
 from tasks_io import delete_task, read_all_tasks, write_task
@@ -22,6 +24,7 @@ CONFIG_PATH = APP_DIR / "config.json"
 LOCK_PATH = APP_DIR / ".singleton.lock"
 SHOW_SIGNAL_PATH = APP_DIR / ".show_signal"
 _lock_file = None
+log = logging.getLogger("task-watcher")
 
 
 def _acquire_single_instance_lock():
@@ -45,7 +48,9 @@ def _acquire_single_instance_lock():
         try:
             SHOW_SIGNAL_PATH.touch()
         except OSError:
-            pass
+            # Best effort: the second launch is exiting anyway; the only loss is
+            # that the running instance doesn't raise its panel.
+            log.debug("could not write show-signal file", exc_info=True)
         return False
     _lock_file = f
     return True
@@ -85,7 +90,10 @@ def notify(title, message):
         toast.set_audio(audio.Default, loop=False)
         toast.show()
     except Exception:
-        pass
+        # Deliberately broad: toasts are best-effort, winotify shells out to PowerShell and its
+        # failure modes aren't documented, and this runs on the Tk thread where an escaped
+        # exception would stall the UI queue. Failure is logged (DEBUG) instead of shown.
+        log.debug("toast notification failed", exc_info=True)
 
 
 class TaskWatcherApp:
@@ -129,7 +137,8 @@ class TaskWatcherApp:
             try:
                 SHOW_SIGNAL_PATH.unlink()
             except OSError:
-                pass
+                # Best effort: worst case the panel is raised again on the next tick.
+                log.debug("could not remove show-signal file", exc_info=True)
             self.root.deiconify()
             self.root.lift()
         self.root.after(50, self._drain_ui_queue)
@@ -311,6 +320,7 @@ class TaskWatcherApp:
 
 
 def main():
+    setup_logging("task-watcher")
     if not _acquire_single_instance_lock():
         return
     app = TaskWatcherApp()
@@ -322,6 +332,8 @@ if __name__ == "__main__":
         main()
     except Exception:
         import traceback
+
+        log.exception("fatal error")
 
         with open(APP_DIR / "app_error.log", "a", encoding="utf-8") as f:
             f.write(f"\n--- {time.ctime()} ---\n")

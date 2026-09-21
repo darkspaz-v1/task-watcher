@@ -1,3 +1,4 @@
+import logging
 import tkinter.font as tkfont
 import tkinter as tk
 from tkinter import ttk
@@ -15,6 +16,8 @@ STATUS_COLORS = {
     "done": "#3DDC97",
     "failed": "#F0576B",
 }
+
+log = logging.getLogger(__name__)
 
 _styles_ready = False
 
@@ -136,6 +139,7 @@ class TaskRow:
     def destroy(self):
         try:
             self.pb.stop()
-        except Exception:
-            pass
+        except tk.TclError:
+            # The widget may already be gone during teardown; we're destroying it anyway.
+            log.debug("progressbar.stop() failed during destroy", exc_info=True)
         self.frame.destroy()

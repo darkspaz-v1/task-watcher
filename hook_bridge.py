@@ -6,10 +6,13 @@ Deliberately minimal and defensive: any failure here must never break the callin
 Claude Code session, so all errors are swallowed.
 """
 import json
+import logging
 import os
 import sys
 import time
 from pathlib import Path
+
+from applog import setup_logging
 
 TASKS_DIR = Path(__file__).parent / "tasks"
 
@@ -49,11 +52,22 @@ def build_task_data(event, existing):
     }
 
 
+def _log_failure(message):
+    """Record a swallowed failure in logs/hook_bridge.log. Set up lazily so the
+    normal path stays as cheap as before; never writes to stdout/stderr, which
+    belong to the Claude Code hook contract."""
+    logging.raiseExceptions = False  # a logging error must not print to the caller's stderr
+    setup_logging("hook_bridge")
+    logging.getLogger("hook_bridge").warning(message, exc_info=True)
+
+
 def main():
     try:
         TASKS_DIR.mkdir(exist_ok=True)
         event = json.load(sys.stdin)
-    except Exception:
+    except (OSError, ValueError):
+        # Unreadable/empty/non-JSON stdin: nothing to report, and the hook must not fail.
+        _log_failure("could not read hook event from stdin")
         return
 
     session_id = str(event.get("session_id", "unknown"))[:12]
@@ -64,7 +78,8 @@ def main():
     if task_file.exists():
         try:
             existing = json.loads(task_file.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, ValueError):
+            _log_failure(f"could not read existing task file {task_file.name}; starting fresh")
             existing = {}
     if not isinstance(existing, dict):
         # Valid JSON but not an object: treat like a missing file instead of raising
@@ -83,12 +98,14 @@ def main():
         tmp_path = task_file.with_name(f"{task_file.stem}.{os.getpid()}.tmp")
         tmp_path.write_text(json.dumps(data), encoding="utf-8")
         os.replace(tmp_path, task_file)
-    except Exception:
-        pass
+    except OSError:
+        _log_failure(f"could not write task file {task_file.name}")
 
 
 if __name__ == "__main__":
     try:
         main()
     except Exception:
-        pass
+        # Last resort by design: this runs inside every Claude Code hook call, and
+        # nothing here may ever break or slow the calling session.
+        _log_failure("unexpected error in hook_bridge")
