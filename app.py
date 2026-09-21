@@ -207,49 +207,57 @@ class TaskWatcherApp:
     def poll_loop(self):
         while not self._stop.is_set():
             time.sleep(self.config["poll_interval_seconds"])
-            tasks = read_all_tasks()
-            now = time.time()
-            stale_seconds = self.config.get("stale_after_minutes", 30) * 60
+            try:
+                self._poll_once()
+            except Exception:
+                # Thread-level guard: an uncaught error here (e.g. a locked task file) used to kill
+                # this thread silently and freeze the panel; log it and try again next tick.
+                log.exception("poll iteration failed; retrying next tick")
 
-            for task_id, task in list(tasks.items()):
-                status = task.get("status")
-                if status not in ("running", "waiting"):
-                    continue
+    def _poll_once(self):
+        tasks = read_all_tasks()
+        now = time.time()
+        stale_seconds = self.config.get("stale_after_minutes", 30) * 60
 
-                is_process_task = bool(task.get("pid") or task.get("process_name"))
+        for task_id, task in list(tasks.items()):
+            status = task.get("status")
+            if status not in ("running", "waiting"):
+                continue
 
-                if is_process_task:
-                    alive = check_process_alive(task)
-                    if alive:
-                        # Confirmed alive right now - refresh _seen_alive once and
-                        # skip the staleness check below entirely; liveness is our
-                        # freshness signal for these, not updated_at.
-                        if not task.get("_seen_alive"):
-                            task["_seen_alive"] = True
-                            write_task(task_id, task)
-                            tasks[task_id] = task
-                        continue
-                    elif alive is False and task.get("_seen_alive"):
-                        task["status"] = "done"
-                        task["progress"] = 100
+            is_process_task = bool(task.get("pid") or task.get("process_name"))
+
+            if is_process_task:
+                alive = check_process_alive(task)
+                if alive:
+                    # Confirmed alive right now - refresh _seen_alive once and
+                    # skip the staleness check below entirely; liveness is our
+                    # freshness signal for these, not updated_at.
+                    if not task.get("_seen_alive"):
+                        task["_seen_alive"] = True
                         write_task(task_id, task)
                         tasks[task_id] = task
-                        continue
-                    # else: alive is False and never seen alive - the watched PID/name
-                    # may just not have started yet. Fall through to the staleness
-                    # check below so a genuine typo eventually resolves instead of
-                    # spinning forever.
-
-                age = now - self._parse_updated_at(task.get("updated_at"), now)
-                if age > stale_seconds:
-                    minutes = self.config.get("stale_after_minutes", 30)
-                    reason = "process never detected" if is_process_task else f"no update in {minutes}+ min"
-                    task["status"] = "failed"
-                    task["label"] = f"{task.get('label', task_id)} ({reason})"
+                    continue
+                elif alive is False and task.get("_seen_alive"):
+                    task["status"] = "done"
+                    task["progress"] = 100
                     write_task(task_id, task)
                     tasks[task_id] = task
+                    continue
+                # else: alive is False and never seen alive - the watched PID/name
+                # may just not have started yet. Fall through to the staleness
+                # check below so a genuine typo eventually resolves instead of
+                # spinning forever.
 
-            self._post(lambda t=tasks: self.update_ui(t))
+            age = now - self._parse_updated_at(task.get("updated_at"), now)
+            if age > stale_seconds:
+                minutes = self.config.get("stale_after_minutes", 30)
+                reason = "process never detected" if is_process_task else f"no update in {minutes}+ min"
+                task["status"] = "failed"
+                task["label"] = f"{task.get('label', task_id)} ({reason})"
+                write_task(task_id, task)
+                tasks[task_id] = task
+
+        self._post(lambda t=tasks: self.update_ui(t))
 
     @staticmethod
     def _parse_updated_at(value, default_now):
