@@ -14,25 +14,10 @@ from pathlib import Path
 TASKS_DIR = Path(__file__).parent / "tasks"
 
 
-def main():
-    try:
-        TASKS_DIR.mkdir(exist_ok=True)
-        event = json.load(sys.stdin)
-    except Exception:
-        return
-
+def build_task_data(event, existing):
+    """Pure mapping from a Claude Code hook event (plus the session's previous task
+    data) to the new task data, or None when the event should be ignored."""
     event_name = event.get("hook_event_name", "")
-    session_id = str(event.get("session_id", "unknown"))[:12]
-    task_id = f"claude-{session_id}"
-    task_file = TASKS_DIR / f"{task_id}.json"
-
-    existing = {}
-    if task_file.exists():
-        try:
-            existing = json.loads(task_file.read_text(encoding="utf-8"))
-        except Exception:
-            existing = {}
-
     progress = existing.get("progress") or 0
     status = "running"
     label = existing.get("label", "Claude Code session")
@@ -53,15 +38,39 @@ def main():
         status = "done"
         progress = 100
     else:
-        return
+        return None
 
-    data = {
+    return {
         "label": label,
         "progress": progress,
         "status": status,
         "source": "claude-code",
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
+
+
+def main():
+    try:
+        TASKS_DIR.mkdir(exist_ok=True)
+        event = json.load(sys.stdin)
+    except Exception:
+        return
+
+    session_id = str(event.get("session_id", "unknown"))[:12]
+    task_id = f"claude-{session_id}"
+    task_file = TASKS_DIR / f"{task_id}.json"
+
+    existing = {}
+    if task_file.exists():
+        try:
+            existing = json.loads(task_file.read_text(encoding="utf-8"))
+        except Exception:
+            existing = {}
+
+    data = build_task_data(event, existing)
+    if data is None:
+        return
+
     try:
         # Atomic write: separate parallel Claude Code tool calls each invoke this
         # script as their own process, so two writes for the same session can land
