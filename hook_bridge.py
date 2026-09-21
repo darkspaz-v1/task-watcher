@@ -66,6 +66,10 @@ def main():
             existing = json.loads(task_file.read_text(encoding="utf-8"))
         except Exception:
             existing = {}
+    if not isinstance(existing, dict):
+        # Valid JSON but not an object: treat like a missing file instead of raising
+        # on every later event for this session.
+        existing = {}
 
     data = build_task_data(event, existing)
     if data is None:

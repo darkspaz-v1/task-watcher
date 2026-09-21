@@ -117,3 +117,11 @@ def test_script_contract_exit_zero_and_silent_on_bad_input():
         )
         assert r.returncode == 0, stdin
         assert r.stdout == "" and r.stderr == "", stdin
+
+
+def test_main_recovers_from_wrong_shaped_existing_file(monkeypatch, isolated_tasks_dir):
+    # Valid JSON but not an object (e.g. a stray list): used to make every later
+    # hook event for this session raise and be silently dropped.
+    (isolated_tasks_dir / "claude-s3.json").write_text("[1, 2]", encoding="utf-8")
+    run_main(monkeypatch, {"hook_event_name": "PreToolUse", "tool_name": "X", "session_id": "s3"})
+    assert read_task(isolated_tasks_dir, "claude-s3.json")["progress"] == 5
