@@ -1,5 +1,7 @@
 # Task Watcher
 
+[![CI](https://github.com/darkspaz-v1/task-watcher/actions/workflows/ci.yml/badge.svg)](https://github.com/darkspaz-v1/task-watcher/actions/workflows/ci.yml)
+
 One panel answering "is it done yet?" for anything long-running — including Claude Code itself.
 
 ## How it works
@@ -19,7 +21,7 @@ One panel answering "is it done yet?" for anything long-running — including Cl
 `hook_bridge.py` is wired into Claude Code hooks (`~/.claude/settings.json`), so every session reports
 its own progress into this panel with no per-session setup.
 
-**Stack:** Python, Tkinter, `pystray`, `win10toast`, Pillow.
+**Stack:** Python, Tkinter, `pystray`, `winotify`, `psutil`, Pillow.
 
 ## Part of a suite
 
@@ -37,11 +39,33 @@ framework — the only thing they share is a set of conventions.
 ## Running it
 
 ```
+py -m venv venv
+venv\Scripts\pip install -r requirements.txt
 run.bat
 ```
 
-That creates the virtualenv on first run, installs `requirements.txt`, and starts the app. Windows
-only — these use Win32 APIs and a system tray.
+Create the virtualenv and install once; after that `run.bat` starts the tray app using `venv\Scripts\pythonw.exe`.
+Windows only — these use Win32 APIs and a system tray.
+
+## Development
+
+```
+venv\Scripts\pip install -r requirements-dev.txt
+venv\Scripts\python -m pytest
+venv\Scripts\ruff check .
+```
+
+The tests cover the pure logic: the `tasks/` file read/write round trip, the hook-event parsing in
+`hook_bridge.py` (including a subprocess test that the hook stays silent and exits 0 on bad input), and
+process liveness checks. They use a temp folder and never touch your real `tasks/` folder or open a window.
+CI runs the same two commands on Windows with Python 3.12 and 3.13.
+
+## Troubleshooting
+
+Log file location: `logs/task-watcher.log` next to `app.py` (rotating, 1 MB x 3); the Claude Code hook writes
+its own `logs/hook_bridge.log` and only when something goes wrong. Set `APP_LOG_LEVEL=DEBUG` before launching
+to also record errors the app deliberately ignores (for example a failed toast notification). A crash traceback
+goes to `app_error.log`.
 
 ## License
 
