@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 from applog import setup_logging
+from tasks_io import task_path
 
 TASKS_DIR = Path(__file__).parent / "tasks"
 
@@ -72,7 +73,10 @@ def main():
 
     session_id = str(event.get("session_id", "unknown"))[:12]
     task_id = f"claude-{session_id}"
-    task_file = TASKS_DIR / f"{task_id}.json"
+    # Sanitize through the same helper tasks_io uses for its own file names, so a
+    # session id containing characters unsafe on the filesystem (\ / : * ? " < > |)
+    # can never produce a path tasks_io itself wouldn't produce for the same id.
+    task_file = task_path(task_id)
 
     existing = {}
     if task_file.exists():

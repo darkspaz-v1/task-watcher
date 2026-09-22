@@ -22,8 +22,7 @@ run.bat
 
 Create the virtualenv and install once; after that `run.bat` starts the tray app using `venv\Scripts\pythonw.exe`. A `tasks` folder appears next to `app.py`.
 
-Then report a task by saving a JSON file into that `tasks` folder, for example `tasks
-ightly-export.json`:
+Then report a task by saving a JSON file into that `tasks` folder, for example `tasks\nightly-export.json`:
 
 ```json
 {"label": "Nightly export", "status": "running", "progress": 40}
@@ -63,8 +62,7 @@ its own progress into this panel with no per-session setup. A session has no rea
 ```
 venv\Scripts\pip install -r requirements-dev.txt
 venv\Scripts\python -m pytest
-venv\Scripts
-uff check .
+venv\Scripts\ruff check .
 ```
 
 The tests cover the pure logic: the `tasks/` file read/write round trip, the hook-event parsing in

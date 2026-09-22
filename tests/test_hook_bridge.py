@@ -128,6 +128,25 @@ def test_main_recovers_from_wrong_shaped_existing_file(monkeypatch, isolated_tas
     assert read_task(isolated_tasks_dir, "claude-s3.json")["progress"] == 5
 
 
+def test_main_sanitizes_unsafe_session_id_same_as_tasks_io(monkeypatch, isolated_tasks_dir):
+    """A session id can contain characters that are illegal in a filename on
+    Windows (or that would traverse into a subdirectory, e.g. '/'). hook_bridge
+    must land in the same sanitized path tasks_io.task_path() would produce for
+    the same task id, so tasks_io's reader (which uses f.stem as the task id)
+    actually finds what hook_bridge wrote."""
+    unsafe_session_id = 'a/b\\c:d*e?f"g<h>i|j'
+    run_main(monkeypatch, {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": unsafe_session_id})
+
+    from tasks_io import task_path
+
+    expected_path = task_path(f"claude-{unsafe_session_id[:12]}")
+    assert expected_path.parent == isolated_tasks_dir
+    assert expected_path.exists()
+    assert json.loads(expected_path.read_text(encoding="utf-8"))["label"] == "Claude Code: running Bash"
+    # No stray file was written anywhere else (e.g. no path traversal from '/' or '\').
+    assert list(isolated_tasks_dir.iterdir()) == [expected_path]
+
+
 def test_write_failure_is_logged_to_file_not_stderr(monkeypatch, isolated_tasks_dir, tmp_path, capsys):
     def boom(*args, **kwargs):
         raise OSError("disk full")
