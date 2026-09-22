@@ -1,4 +1,4 @@
-pystray
-pillow
-psutil
-winotify
+pystray>=0.19.5,<0.20
+pillow>=12.3,<13
+psutil>=7.2,<8
+winotify>=1.1,<2

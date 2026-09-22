@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 *.lock
 tasks/
+logs/
+app_error.log
