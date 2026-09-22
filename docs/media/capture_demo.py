@@ -8,6 +8,18 @@ Safety properties (this is how the published media was made):
   * The single-instance lock is never taken, so it cannot collide with a running Task Watcher.
   * Every task below is invented (no real names, paths, hosts or accounts).
   * Only the panel window's rectangle is captured, never the desktop; toasts are stubbed out.
+
+Why the done-toast isn't in the capture (evaluated, rejected):
+  A real Windows toast renders outside the app window -- bottom-right of the screen, placed and
+  animated by the OS notification platform, not by this process. Capturing it would mean grabbing
+  a chunk of the real desktop instead of just this app's window rect, which breaks the "never
+  capture the desktop" safety property above (whatever else is on screen -- other windows, other
+  apps' notifications -- would end up in a published GIF). It's also not reliably reproducible:
+  the toast is suppressed by Focus Assist, requires notifications to be enabled for the app, and
+  winotify shells out to PowerShell to show it, so timing before a screen grab is not deterministic.
+  For those reasons `app.notify` stays stubbed out here (see below) and the toast is not captured;
+  `notify()` in app.py fires it with title "Task finished"/"Task failed" and the task's label as
+  the message -- see the README caption for a one-line description of what it looks like.
 Needs Pillow and the runtime requirements (pystray, winotify, psutil). Windows only.
 """
 import ctypes

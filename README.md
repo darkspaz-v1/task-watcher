@@ -8,7 +8,7 @@ A small always-on-top Windows panel that answers "is it done yet?" for anything 
 
 ![Screen capture of the Task Watcher panel with three invented tasks: "Render product demo video" climbs to 100 percent and turns green with DONE, "Train classifier" advances to 71 percent, and "Nightly export to archive" shows an indeterminate blue bar.](docs/media/demo.gif)
 
-*Real capture of the panel window, using invented tasks in a throwaway temp folder (see `docs/media/capture_demo.py`). The Windows toast that fires when a task flips to done is not visible here because only the panel window was captured.*
+*Real capture of the panel window, using invented tasks in a throwaway temp folder (see `docs/media/capture_demo.py`). The Windows toast that fires when a task flips to done is not visible here because only the panel window was captured, never the desktop — capturing the toast itself would mean grabbing the real desktop, where it's rendered by Windows outside the app; that toast looks like a standard Windows notification titled "Task finished" (or "Task failed"), with the task's label as its message and "Task Watcher" as the source app.*
 
 ## Quick start
 
